@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// Safe mounting function
+// Safe mounting function for browser environment
 const mount = () => {
     const rootElement = document.getElementById('root');
     if (!rootElement) {
