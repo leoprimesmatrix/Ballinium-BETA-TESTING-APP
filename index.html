@@ -23,10 +23,14 @@
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "path": "https://esm.sh/path@^0.12.7",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
     "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "url": "https://esm.sh/url@^0.11.4"
   }
 }
 </script>
@@ -36,14 +40,20 @@
 
     <script type="module">
       const fileManifest = [
-        'index.tsx', 'App.tsx', 'constants.ts', 'types.ts', 'levels.ts', 
-        'services/audioService.ts', 'components/TitleScreen.tsx', 
-        'components/SimulationCanvas.tsx', 'components/ControlPanel.tsx', 
-        'components/StrategyHUD.tsx', 'components/Credits.tsx',
-        'components/BetaAuth.tsx'
+        'index.tsx', 
+        'App.tsx', 
+        'constants.ts', 
+        'types.ts', 
+        'levels.ts', 
+        'services/audioService.ts', 
+        'components/BetaAuth.tsx', 
+        'components/ControlPanel.tsx', 
+        'components/Credits.tsx', 
+        'components/SimulationCanvas.tsx', 
+        'components/StrategyHUD.tsx', 
+        'components/TitleScreen.tsx'
       ];
 
-      // We use 18.2.0 specifically to stop Error #31
       const externalImports = {
         "react": "https://esm.sh/react@18.2.0",
         "react-dom": "https://esm.sh/react-dom@18.2.0",
@@ -61,36 +71,59 @@
           else stack.push(part);
         }
         const resolved = stack.join('/');
-        return [resolved + '.ts', resolved + '.tsx', resolved + '/index.ts', resolved].find(c => fileManifest.includes(c)) || importPath;
+        
+        const candidates = [
+            resolved,
+            resolved + '.ts',
+            resolved + '.tsx',
+            resolved + '/index.ts',
+            resolved + '/index.tsx'
+        ];
+        
+        return candidates.find(c => fileManifest.includes(c)) || importPath;
       }
 
       async function boot() {
         const blobRegistry = {};
-        for (const file of fileManifest) {
-          let code = await fetch(file).then(r => r.text());
-          code = code.replace(/import\s+['"].*?\.css['"];/g, '');
-          
-          // Fixed the "Extra Quote" bug from previous versions
-          code = code.replace(/(import\s+(?:[\w\s{},*]+from\s+)?)(["'])([.][^"']+)(["'])/g, (m, pre, q1, path, q2) => {
-             return `${pre}${q1}${resolvePath(file, path)}${q2}`;
-          });
-
+        
+        await Promise.all(fileManifest.map(async (file) => {
           try {
-            const result = Babel.transform(code, { 
-              presets: [['react', { runtime: 'classic' }], 'typescript'], 
-              filename: file 
-            });
-            blobRegistry[file] = URL.createObjectURL(new Blob([result.code], { type: 'application/javascript' }));
-          } catch (e) { console.error(`Compile Error [${file}]:`, e); }
-        }
+              let code = await fetch(file).then(r => {
+                  if (!r.ok) throw new Error(`Status ${r.status}`);
+                  return r.text();
+              });
+
+              // Clean up CSS imports for browser compatibility
+              code = code.replace(/import\s+['"].*?\.css['"];/g, '');
+              
+              // Rewrite relative imports to map to manifest file names
+              code = code.replace(/(import\s+(?:[\w\s{},*]+from\s+)?)(["'])([.][^"']+)(["'])/g, (m, pre, q1, path, q2) => {
+                 const resolved = resolvePath(file, path);
+                 return `${pre}${q1}${resolved}${q2}`;
+              });
+
+              const result = Babel.transform(code, { 
+                presets: [
+                    ['react', { runtime: 'classic' }], 
+                    'typescript'
+                ], 
+                filename: file 
+              });
+              
+              blobRegistry[file] = URL.createObjectURL(new Blob([result.code], { type: 'application/javascript' }));
+          } catch (e) {
+              console.error(`[Boot Error] Failed to process ${file}:`, e);
+          }
+        }));
 
         const script = document.createElement('script');
         script.type = 'importmap';
         script.textContent = JSON.stringify({ imports: { ...externalImports, ...blobRegistry } });
         document.head.appendChild(script);
         
-        import(blobRegistry['index.tsx']);
+        import(blobRegistry['index.tsx']).catch(e => console.error("Runtime Error:", e));
       }
+
       boot();
     </script>
 </body>
