@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BALLINIUM // ASCENDED</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+      body { font-family: 'Rajdhani', sans-serif; background-color: #050505; color: #fff; overflow: hidden; }
+      .font-display { font-family: 'Orbitron', sans-serif; }
+      .neon-text-blue { text-shadow: 0 0 5px #00f3ff, 0 0 10px #00f3ff; }
+      .neon-text-pink { text-shadow: 0 0 5px #ff00ff, 0 0 10px #ff00ff; }
+      .neon-text-green { text-shadow: 0 0 5px #00ff9f, 0 0 10px #00ff9f; }
+      .scanlines { background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.1) 50%); background-size: 100% 4px; position: absolute; inset: 0; pointer-events: none; z-index: 9999; }
+      .vignette { background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.6) 100%); position: absolute; inset: 0; pointer-events: none; z-index: 9998; }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+      const fileManifest = [
+        'index.tsx', 'App.tsx', 'constants.ts', 'types.ts', 'levels.ts', 
+        'services/audioService.ts', 'components/TitleScreen.tsx', 
+        'components/SimulationCanvas.tsx', 'components/ControlPanel.tsx', 
+        'components/StrategyHUD.tsx', 'components/Credits.tsx',
+        'components/BetaAuth.tsx'
+      ];
+
+      // We use 18.2.0 specifically to stop Error #31
+      const externalImports = {
+        "react": "https://esm.sh/react@18.2.0",
+        "react-dom": "https://esm.sh/react-dom@18.2.0",
+        "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+      };
+
+      function resolvePath(baseFile, importPath) {
+        if (!importPath.startsWith('.')) return importPath;
+        const stack = baseFile.split('/'); stack.pop();
+        const parts = importPath.split('/');
+        for (const part of parts) {
+          if (part === '.') continue;
+          if (part === '..') stack.pop();
+          else stack.push(part);
+        }
+        const resolved = stack.join('/');
+        return [resolved + '.ts', resolved + '.tsx', resolved + '/index.ts', resolved].find(c => fileManifest.includes(c)) || importPath;
+      }
+
+      async function boot() {
+        const blobRegistry = {};
+        for (const file of fileManifest) {
+          let code = await fetch(file).then(r => r.text());
+          code = code.replace(/import\s+['"].*?\.css['"];/g, '');
+          
+          // Fixed the "Extra Quote" bug from previous versions
+          code = code.replace(/(import\s+(?:[\w\s{},*]+from\s+)?)(["'])([.][^"']+)(["'])/g, (m, pre, q1, path, q2) => {
+             return `${pre}${q1}${resolvePath(file, path)}${q2}`;
+          });
+
+          try {
+            const result = Babel.transform(code, { 
+              presets: [['react', { runtime: 'classic' }], 'typescript'], 
+              filename: file 
+            });
+            blobRegistry[file] = URL.createObjectURL(new Blob([result.code], { type: 'application/javascript' }));
+          } catch (e) { console.error(`Compile Error [${file}]:`, e); }
+        }
+
+        const script = document.createElement('script');
+        script.type = 'importmap';
+        script.textContent = JSON.stringify({ imports: { ...externalImports, ...blobRegistry } });
+        document.head.appendChild(script);
+        
+        import(blobRegistry['index.tsx']);
+      }
+      boot();
+    </script>
+</body>
+</html>
