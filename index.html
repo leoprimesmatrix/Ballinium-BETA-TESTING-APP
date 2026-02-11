@@ -5,11 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BALLINIUM // ASCENDED</title>
     
-    <!-- Core Dependencies -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     
@@ -22,69 +20,28 @@
       .scanlines { background: linear-gradient(to bottom, transparent 50%, rgba(0,0,0,0.1) 50%); background-size: 100% 4px; position: absolute; inset: 0; pointer-events: none; z-index: 9999; }
       .vignette { background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.6) 100%); position: absolute; inset: 0; pointer-events: none; z-index: 9998; }
       #root { width: 100vw; height: 100vh; }
-      
-      /* Loading Screen Styles */
-      #loader { position: fixed; inset: 0; background: #000; z-index: 10000; display: flex; align-items: center; justify-content: center; color: #00f3ff; font-family: monospace; flex-direction: column; gap: 20px; }
-      .loader-bar { width: 200px; height: 2px; background: #111; position: relative; overflow: hidden; }
-      .loader-progress { position: absolute; top: 0; left: 0; height: 100%; width: 0%; background: #00f3ff; transition: width 0.2s; box-shadow: 0 0 10px #00f3ff; }
     </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
-  }
-}
-</script>
 </head>
 <body>
-    <div id="loader">
-        <div style="font-size: 24px; letter-spacing: 0.5em; font-weight: bold;">INITIALIZING</div>
-        <div class="loader-bar"><div class="loader-progress" id="progress"></div></div>
-        <div id="status" style="font-size: 10px; opacity: 0.7;">LOADING KERNEL...</div>
-    </div>
-    
     <div id="root"></div>
 
     <script type="module">
-      /** 
-       * NO-BUILD ARCHITECTURE LOADER
-       * Compiles TypeScript in-browser via Babel Standalone.
-       */
-
       const fileManifest = [
-        'index.tsx', 
-        'App.tsx', 
-        'constants.ts', 
-        'types.ts', 
-        'levels.ts', 
-        'services/audioService.ts', 
-        'components/BetaAuth.tsx', 
-        'components/ControlPanel.tsx', 
-        'components/Credits.tsx', 
-        'components/SimulationCanvas.tsx', 
-        'components/StrategyHUD.tsx', 
-        'components/TitleScreen.tsx'
+        'index.tsx', 'App.tsx', 'constants.ts', 'types.ts', 'levels.ts', 
+        'services/audioService.ts', 'components/TitleScreen.tsx', 
+        'components/SimulationCanvas.tsx', 'components/ControlPanel.tsx', 
+        'components/StrategyHUD.tsx', 'components/Credits.tsx',
+        'components/BetaAuth.tsx'
       ];
 
-      // Locked Dependencies (React 18.2.0)
+      // Dependency Lockdown (Strict React 18.2)
       const externalImports = {
         "react": "https://esm.sh/react@18.2.0",
+        "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
         "react-dom": "https://esm.sh/react-dom@18.2.0",
         "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+        "lucide-react": "https://esm.sh/lucide-react@0.292.0?external=react"
       };
-
-      const statusEl = document.getElementById('status');
-      const progressEl = document.getElementById('progress');
-      const loaderEl = document.getElementById('loader');
-
-      function updateProgress(percent, msg) {
-          if (progressEl) progressEl.style.width = `${percent}%`;
-          if (statusEl) statusEl.innerText = msg;
-      }
 
       function resolvePath(baseFile, importPath) {
         if (!importPath.startsWith('.')) return importPath;
@@ -96,81 +53,46 @@
           else stack.push(part);
         }
         const resolved = stack.join('/');
-        
-        const candidates = [
-            resolved,
-            resolved + '.ts',
-            resolved + '.tsx',
-            resolved + '/index.ts',
-            resolved + '/index.tsx'
-        ];
-        
-        return candidates.find(c => fileManifest.includes(c)) || importPath;
+        return [resolved + '.ts', resolved + '.tsx', resolved + '/index.ts', resolved].find(c => fileManifest.includes(c)) || importPath;
       }
 
       async function boot() {
         const blobRegistry = {};
-        let loadedCount = 0;
-        
-        updateProgress(10, 'FETCHING SOURCE...');
-
-        // Parallel Fetch
-        await Promise.all(fileManifest.map(async (file) => {
+        for (const file of fileManifest) {
           try {
-              let code = await fetch(file).then(r => {
-                  if (!r.ok) throw new Error(`Status ${r.status}`);
-                  return r.text();
-              });
+            let code = await fetch(file).then(r => r.text());
+            code = code.replace(/import\s+['"].*?\.css['"];/g, '');
+            code = code.replace(/import\.meta\.env/g, '{}');
+            
+            code = code.replace(/(import\s+(?:[\w\s{},*]+from\s+)?)(["'])([.][^"']+)(["'])/g, (m, pre, q1, path, q2) => {
+               return `${pre}${q1}${resolvePath(file, path)}${q2}`;
+            });
 
-              // Pre-process: Strip CSS and Config
-              code = code.replace(/import\s+['"].*?\.css['"];/g, '');
-              code = code.replace(/import\.meta\.env/g, '{}'); 
-              
-              // Pre-process: Resolve Relative Paths
-              code = code.replace(/(import\s+(?:[\w\s{},*]+from\s+)?)(["'])([.][^"']+)(["'])/g, (m, pre, q1, path, q2) => {
-                 const resolved = resolvePath(file, path);
-                 return `${pre}${q1}${resolved}${q2}`;
-              });
+            const result = Babel.transform(code, { 
+              presets: [
+                ['react', { runtime: 'automatic' }], 
+                'typescript'
+              ], 
+              filename: file 
+            });
+            blobRegistry[file] = URL.createObjectURL(new Blob([result.code], { type: 'application/javascript' }));
+          } catch (e) { console.error(`Compile Error [${file}]:`, e); }
+        }
 
-              // Compile
-              const result = Babel.transform(code, { 
-                presets: [
-                    ['react', { runtime: 'classic' }], 
-                    'typescript'
-                ], 
-                filename: file 
-              });
-              
-              blobRegistry[file] = URL.createObjectURL(new Blob([result.code], { type: 'application/javascript' }));
-              
-              loadedCount++;
-              updateProgress(10 + (loadedCount / fileManifest.length) * 80, `COMPILED ${file}`);
-
-          } catch (e) {
-              console.error(`[Boot Error] Failed to process ${file}:`, e);
-              statusEl.style.color = 'red';
-              statusEl.innerText = `ERROR: ${file}`;
-          }
-        }));
-
-        // Inject Import Map
-        updateProgress(95, 'LINKING MODULES...');
         const script = document.createElement('script');
         script.type = 'importmap';
-        script.textContent = JSON.stringify({ imports: { ...externalImports, ...blobRegistry } });
+        // Map both exact filenames and extension-less versions
+        const finalImports = { ...externalImports };
+        for (const file in blobRegistry) {
+            finalImports[file] = blobRegistry[file];
+            finalImports[file.replace(/\.(ts|tsx)$/, '')] = blobRegistry[file];
+        }
+
+        script.textContent = JSON.stringify({ imports: finalImports });
         document.head.appendChild(script);
         
-        // Launch
-        updateProgress(100, 'EXECUTING...');
-        setTimeout(() => {
-            if (loaderEl) loaderEl.style.display = 'none';
-            import(blobRegistry['index.tsx']).catch(e => {
-                console.error("Runtime Error:", e);
-                document.body.innerHTML = `<div style="color:red; padding:20px;">RUNTIME ERROR: ${e.message}</div>`;
-            });
-        }, 500);
+        import(blobRegistry['index.tsx']);
       }
-
       boot();
     </script>
 </body>
