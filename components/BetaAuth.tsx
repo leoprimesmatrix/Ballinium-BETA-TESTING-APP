@@ -8,7 +8,7 @@ interface P {
 
 const D = [
   "b708103698c45bfa50f50f944d3996e81f28e0b2a0b8093c1bab896e54d263b2",
-  "d6ca5be7387567153d3d90b451a1edc569b99087c1f61073281b8653cf6e7380"
+  "bcd86b17c649486381c8adbd7da3457feb70885cfaf532ba474992605ef6bd4f"
 ];
 
 export const BetaAuth: React.FC<P> = ({ x }) => {
